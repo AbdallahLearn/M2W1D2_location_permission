@@ -44,10 +44,10 @@ Build and run the app on an emulator or a real device with location enabled.
 
 
 ##  Permissions Used
+  ```bash
+   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-
- Author
+ **Author**
 Abdullah Al-Juhani

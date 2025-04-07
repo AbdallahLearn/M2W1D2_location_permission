@@ -2,14 +2,12 @@ package com.example.m2w1d2_location_permission
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.location.Address
-import android.location.Geocoder
-import android.location.Location
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -26,7 +24,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,7 +40,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,24 +48,24 @@ import androidx.core.content.PermissionChecker
 import com.example.m2w1d2_location_permission.ui.theme.M2W1D2_location_permissionTheme
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
-import java.util.Locale
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContent {
             M2W1D2_location_permissionTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         FullscreenImage(imageRes = R.drawable.ic_launcher_foreground)
-                        BottomCard()
                         GetCurrentLocation()
                     }
                 }
@@ -80,48 +76,43 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun FullscreenImage(imageRes: Int) {
-
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
-        // Background image filling the screen
-        Image(
-            painter = painterResource(id = imageRes),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(painter = painterResource(id = imageRes), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
     }
 }
 
 @Composable
-fun BottomCard() {
-    // Get screen height
+fun BottomCard(userLatLng: LatLng?) {
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val offsetY = with(LocalDensity.current) { (screenHeight / 2.8f).toPx().toInt() } // Convert Dp to pixels
+    val offsetY = with(LocalDensity.current) { (screenHeight / 2.8f).toPx().toInt() }
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(userLatLng ?: LatLng(24.7136, 46.6753), 12f)
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Card positioned half from the bottom
         Card(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .offset { IntOffset(x = 0, y = offsetY) } // Offset using calculated pixel value
-                .fillMaxSize(), // Adjust card width as needed
+                .offset { IntOffset(x = 0, y = offsetY) }
+                .fillMaxSize(),
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             elevation = CardDefaults.cardElevation(8.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White)
-        )  {
-            // Card content
-            Text(
-                text = "This is a half-screen rounded card!",
-                fontSize = 16.sp,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                color = Color.Black
-            )
+        ) {
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                properties = MapProperties(isMyLocationEnabled = true)
+            ) {
+                userLatLng?.let {
+                    Marker(
+                        state = MarkerState(position = it),
+                        title = "You are here",
+                        snippet = "Current Location"
+                    )
+                }
+            }
         }
     }
 }
@@ -132,17 +123,17 @@ fun GetCurrentLocation() {
     var coordinates by remember { mutableStateOf("Fetching coordinates...") }
     var errorMessage by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
+    var userLatLng by remember { mutableStateOf<LatLng?>(null) }
 
-    val fusedLocationClient = remember {
-        LocationServices.getFusedLocationProviderClient(context)
-    }
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            fetchCoordinates(context, fusedLocationClient) { result, error ->
-                coordinates = result ?: "Coordinates not available"
+            fetchCoordinates(context, fusedLocationClient) { latLng, error ->
+                userLatLng = latLng
+                coordinates = latLng?.let { "Latitude: ${it.latitude}, Longitude: ${it.longitude}" } ?: "Coordinates not available"
                 errorMessage = error ?: ""
                 loading = false
             }
@@ -156,8 +147,9 @@ fun GetCurrentLocation() {
     LaunchedEffect(Unit) {
         when (ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)) {
             PermissionChecker.PERMISSION_GRANTED -> {
-                fetchCoordinates(context, fusedLocationClient) { result, error ->
-                    coordinates = result ?: "Coordinates not available"
+                fetchCoordinates(context, fusedLocationClient) { latLng, error ->
+                    userLatLng = latLng
+                    coordinates = latLng?.let { "Latitude: ${it.latitude}, Longitude: ${it.longitude}" } ?: "Coordinates not available"
                     errorMessage = error ?: ""
                     loading = false
                 }
@@ -175,44 +167,28 @@ fun GetCurrentLocation() {
         isLoading = loading,
         onRefresh = {
             loading = true
-            fetchCoordinates(context, fusedLocationClient) { result, error ->
-                coordinates = result ?: "Coordinates not available"
+            fetchCoordinates(context, fusedLocationClient) { latLng, error ->
+                userLatLng = latLng
+                coordinates = latLng?.let { "Latitude: ${it.latitude}, Longitude: ${it.longitude}" } ?: "Coordinates not available"
                 errorMessage = error ?: ""
                 loading = false
             }
         }
     )
+
+    BottomCard(userLatLng = userLatLng)
 }
 
-
-
 @Composable
-fun LocationCard(
-    coordinates: String,
-    error: String,
-    isLoading: Boolean,
-    onRefresh: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.TopCenter
-    ) {
+fun LocationCard(coordinates: String, error: String, isLoading: Boolean, onRefresh: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.TopCenter) {
         Card(
             shape = RoundedCornerShape(16.dp),
             elevation = CardDefaults.cardElevation(8.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)),
-            modifier = Modifier
-                .padding(top = 32.dp)
-                .fillMaxWidth()
+            modifier = Modifier.padding(top = 32.dp).fillMaxWidth()
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = when {
                         isLoading -> "Loading..."
@@ -225,10 +201,7 @@ fun LocationCard(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
-                    onClick = onRefresh,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
-                ) {
+                Button(onClick = onRefresh, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))) {
                     Text(text = "Refresh Location", color = Color.White)
                 }
             }
@@ -236,19 +209,17 @@ fun LocationCard(
     }
 }
 
-
-
 @SuppressLint("MissingPermission")
 private fun fetchCoordinates(
     context: Context,
     fusedLocationClient: FusedLocationProviderClient,
-    onResult: (String?, String?) -> Unit
+    onResult: (LatLng?, String?) -> Unit
 ) {
     fusedLocationClient.lastLocation
         .addOnSuccessListener { location ->
             location?.let {
-                val coords = "Latitude: ${it.latitude}, Longitude: ${it.longitude}"
-                onResult(coords, null)
+                val latLng = LatLng(it.latitude, it.longitude)
+                onResult(latLng, null)
             } ?: onResult(null, "Location not found")
         }
         .addOnFailureListener {
